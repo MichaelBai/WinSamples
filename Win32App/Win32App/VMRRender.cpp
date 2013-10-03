@@ -69,7 +69,9 @@ HRESULT VMRRender::InitWindowlessVMR(
     hr = pVmr->QueryInterface(IID_IVMRFilterConfig, (void**)&pConfig); 
     if (SUCCEEDED(hr)) 
     { 
-        hr = pConfig->SetRenderingMode(VMRMode_Windowless); 
+        hr = pConfig->SetRenderingMode(VMRMode_Windowless);
+        // force the VMR to go into "mixer mode."
+        hr = pConfig->SetNumberOfStreams(1);
         pConfig->Release(); 
     }
     if (SUCCEEDED(hr))
@@ -116,6 +118,74 @@ HRESULT VMRRender::posVideo()
     return hr;
 }
 
+HRESULT BlendApplicationImage( 
+                              HWND hwndApp,
+                              IVMRWindowlessControl* pWc,
+                              HBITMAP hbm
+                              )
+{
+    LONG cx, cy;
+    HRESULT hr;
+    hr = pWc->GetNativeVideoSize(&cx, &cy, NULL, NULL);
+    if (FAILED(hr))
+        return hr;
+
+    HDC hdc = GetDC(hwndApp);
+    if (hdc == NULL)
+    {
+        return E_FAIL;
+    }
+
+    HDC hdcBmp = CreateCompatibleDC(hdc);
+    ReleaseDC(hwndApp, hdc);
+
+    if (hdcBmp == NULL)
+    {
+        return E_FAIL;
+    }
+
+    BITMAP bm;
+    if (0 == GetObject(hbm, sizeof(bm), &bm))
+    {
+        DeleteDC(hdcBmp);
+        return E_FAIL;
+    }
+
+    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcBmp, hbm);
+    if (hbmOld == 0)
+    {
+        DeleteDC(hdcBmp);
+        return E_FAIL;
+    }
+
+    VMRALPHABITMAP bmpInfo;
+    ZeroMemory(&bmpInfo, sizeof(bmpInfo) );
+    bmpInfo.dwFlags = VMRBITMAP_HDC;
+    bmpInfo.hdc = hdcBmp;
+
+    // Show the entire bitmap in the top-left corner of the video image.
+    SetRect(&bmpInfo.rSrc, 0, 0, bm.bmWidth, bm.bmHeight);
+    bmpInfo.rDest.left = 0.f;
+    bmpInfo.rDest.top = 0.f;
+    bmpInfo.rDest.right = (float)bm.bmWidth / (float)cx;
+    bmpInfo.rDest.bottom = (float)bm.bmHeight / (float)cy;
+
+    // Set the transparency value (1.0 is opaque, 0.0 is transparent).
+    bmpInfo.fAlpha = 0.5f;
+
+    IVMRMixerBitmap* pBmp;
+    hr = pWc->QueryInterface(IID_IVMRMixerBitmap, (LPVOID *)&pBmp);
+    if (SUCCEEDED(hr)) 
+    {
+        pBmp->SetAlphaBitmap(&bmpInfo);
+        pBmp->Release();
+    }
+
+    DeleteObject(SelectObject(hdcBmp, hbmOld));
+    DeleteDC(hdcBmp);
+    return hr;
+}
+
 void VMRRender::buildGraph()
 {
     HRESULT hr = InitWindowlessVMR(hwnd, pGraph, &g_pWc);
@@ -125,7 +195,13 @@ void VMRRender::buildGraph()
         if (SUCCEEDED(hr))
         {
             // Build the graph. For example:
-            pGraph->RenderFile(L"F:\\TDDownload\\test.wmv", NULL);
+            pGraph->RenderFile(L"F:\\TDDownload\\Speed.wmv", NULL);
+
+            HBITMAP hbm;
+            hbm = (HBITMAP)LoadImage(NULL, "F:\\TDDownload\\test.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+            BlendApplicationImage(hwnd, g_pWc, hbm);
+            DeleteObject(hbm);
+
             // Run the graph.
             hr = pControl->Run();
             if (SUCCEEDED(hr))
