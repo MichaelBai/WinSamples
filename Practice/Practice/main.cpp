@@ -4,38 +4,39 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <functional>
 
 using namespace std;
+
+template<typename InputIter, typename OutputIter, typename Opr>
+void subVec(InputIter inputIterBegin, InputIter inputIterEnd, OutputIter outputIter, Opr opr)
+{
+    sort(inputIterBegin, inputIterEnd);
+
+    InputIter vIter;
+    //greater_equal<int>() is a function object
+    vIter = find_if(inputIterBegin, inputIterEnd, opr);
+    copy(inputIterBegin, vIter, outputIter);
+}
+
 int main()
 {
-    vector<string> vStr;
-    string str;
-    fstream infile("E:\\GitHub\\Samples\\Practice\\Practice\\test.txt");
-    if(!infile)
+    const int maxLen = 8;
+    int arr[maxLen] = {3, 55, 21, 18, 8, 9, 78, 12};
+    vector<int> vec(arr, arr+maxLen);
+    vector<int> nVec(maxLen);
+    int nArr[maxLen];
+    subVec(vec.begin(), vec.end(), nVec.begin(), bind2nd(greater<int>(), 8));
+    subVec(arr, arr+maxLen, nArr, bind2nd(less<int>(), 8));
+    for (int i=0; i<maxLen; i++)
     {
-        cerr << "Can not open file" << endl;
-        return -1;
+        cout << nVec[i] << " ";
     }
-    while (infile >> str)
+    cout << endl;
+    for (int i=0; i<maxLen; i++)
     {
-        //cout << str << " ";
-        vStr.push_back(str);
+        cout << nArr[i] << " ";
     }
-    for (int i = 0; i < vStr.size(); ++i)
-    {
-        cout << vStr[i] << " ";
-    }
-    sort(vStr.begin(), vStr.end());
-    ofstream outfile("newFile.txt");
-    if (!outfile)
-    {
-        cerr << "Can not open writable file." << endl;
-        return -1;
-    }
-    for (int i=0; i < vStr.size(); ++i)
-    {
-        outfile << vStr[i] << " ";
-    }
-    //printf("%s", "aaa\n");
+    cout << endl;
     return 0;
 }
